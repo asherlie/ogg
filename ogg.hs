@@ -15,7 +15,7 @@ chunk str = case (words str) of
                   _            -> ["", "", ""]
 
 flatten :: [String] -> String
-flatten (x:y:rest) = x ++ y ++ (flatten rest)
+flatten (x:y:rest) = x ++ " " ++ y ++ " " ++ (flatten rest)
 flatten [x]        = x
 flatten []         = ""
 
@@ -43,5 +43,4 @@ eval_cmd (CMD_EMPTY) = putStrLn "try again"
 
 main = do
       name <- getLine
-      --x <- process_cmd (chunk name)
-      putStr name
+      eval_cmd (process_cmd (chunk name))
