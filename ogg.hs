@@ -4,8 +4,10 @@
  - Gcode
  -}
 
-data CMD_PRE = LAYER | G | M
-data CMD = CMD CMD_PRE Integer Integer | RAW_GCODE String | CMD_EMPTY
+data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
+data CMD_PRE = LAYER LAYER_OP | G | M
+data CMD     = CMD CMD_PRE Integer Integer | RAW_GCODE String | CMD_EMPTY
+{-data MACRO   = CMD CMD-}
 
 chunk :: String -> [String]
 chunk str = case (words str) of
@@ -26,21 +28,35 @@ numeric [] = True
 --process_cmd :: String -> [String]
 -- takes in a string broken up by spaces
 process_cmd :: [String] -> CMD
-process_cmd ["l", x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)
+{-process_cmd ['l':ch:rest, x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)-}
+process_cmd ['l':ch:rest, x, y]  = case ch of
+                                    'p' -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)
 process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)
 process_cmd ["", "", ""] = CMD_EMPTY
-process_cmd lst  = RAW_GCODE (flatten lst)
+process_cmd lst          = RAW_GCODE (flatten lst)
 
-eval_cmd :: CMD -> IO ()
+{- generates serial output -}
+eval_cmd :: CMD -> String
+eval_cmd (CMD (LAYER op) offset arg) = case op of
+                                    PAUSE -> "l3 " ++ show offset
+                                    TEMP_SET -> "l2 " ++ show offset ++ show arg
+                                    CLEAR -> "l1"
+                                    ENABLE_DUP -> "l8"
+                                    DISABLE_DUP -> "l9"
+
 eval_cmd (CMD prefix x y) = case prefix of
-                              LAYER -> putStrLn ("layer operation in " ++ show x)
-                              G     -> putStrLn ("G" ++ show x)
-                              M     -> putStrLn ("M command" ++ show x)
+                              (LAYER op) -> "layer operation in " ++ show x
+                              G     -> "G" ++ show x
+                              M     -> "M command" ++ show x
 
-eval_cmd (RAW_GCODE cmdstr) = putStrLn cmdstr
-eval_cmd (CMD_EMPTY) = putStrLn "try again"
+eval_cmd (RAW_GCODE cmdstr) = cmdstr
+eval_cmd (CMD_EMPTY) = "try again"
 
+{-predefined commands-}
+{-layer_pause offset = -}
+
+{-parse_str :: String -> CMD-}
 
 main = do
       name <- getLine
-      eval_cmd (process_cmd (chunk name))
+      putStrLn (eval_cmd (process_cmd (chunk name)))
