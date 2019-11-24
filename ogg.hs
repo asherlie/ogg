@@ -40,6 +40,9 @@ process_cmd ['l':ch:rest, x, y]  = case ch of
                                           {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
                                           True -> CMD (LAYER PAUSE) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
                                           _    -> CMD_EMPTY
+                                    {-layer temp-}
+                                    {-'t' -> -}
+                                    _  -> CMD_EMPTY
 {-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
 process_cmd ["", "", ""] = CMD_EMPTY
 process_cmd lst          = RAW_GCODE (flatten lst)
@@ -49,18 +52,21 @@ process_cmd lst          = RAW_GCODE (flatten lst)
  - for each CMD
  -}
 eval_cmd :: CMD -> [String]
-eval_cmd (CMD (LAYER op) offset arg) = case op of
+eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) (CMD_ARG_INT arg)) = case op of
                                     PAUSE       -> ["l3 " ++ show offset]
                                     TEMP_SET    -> ["l2 " ++ show offset ++ show arg]
                                     CLEAR       -> ["l1"]
                                     ENABLE_DUP  -> ["l8"]
                                     DISABLE_DUP -> ["l9"]
+{- layer op without integer arguments -}
+eval_cmd (CMD (LAYER op) _ _) = [""]
 
 eval_cmd (CMD prefix x y) = case prefix of
                               {-(LAYER op)    -> ["layer operation in " ++ show x]-}
                               (PRINT ptype) -> case ptype of
                                                      STARTPRINT -> ["g23 " ++ ""]
                                                      STOPPRINT  -> ["M25"]
+                              _             -> [""]
                               {-
                                -G     -> "G" ++ show x
                                -M     -> "M command" ++ show x
