@@ -9,7 +9,10 @@ data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
 data PRINT_CMD = STARTPRINT | STOPPRINT
 
 data CMD_PRE = LAYER LAYER_OP | PRINT PRINT_CMD
-data CMD     = CMD CMD_PRE Integer Integer | RAW_GCODE String | CMD_EMPTY
+data CMD_ARG = CMD_ARG_STR String
+             | CMD_ARG_INT Integer
+
+data CMD     = CMD CMD_PRE CMD_ARG CMD_ARG | RAW_GCODE String | CMD_EMPTY
 {-data MACRO   = CMD CMD-}
 
 chunk :: String -> [String]
@@ -34,7 +37,8 @@ process_cmd :: [String] -> CMD
 {-process_cmd ['l':ch:rest, x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
                                     'p' -> case (numeric x) && (numeric y) of
-                                          True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)
+                                          {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
+                                          True -> CMD (LAYER PAUSE) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
                                           _    -> CMD_EMPTY
 {-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
 process_cmd ["", "", ""] = CMD_EMPTY
@@ -46,17 +50,17 @@ process_cmd lst          = RAW_GCODE (flatten lst)
  -}
 eval_cmd :: CMD -> [String]
 eval_cmd (CMD (LAYER op) offset arg) = case op of
-                                    PAUSE -> ["l3 " ++ show offset]
-                                    TEMP_SET -> ["l2 " ++ show offset ++ show arg]
-                                    CLEAR -> ["l1"]
-                                    ENABLE_DUP -> ["l8"]
+                                    PAUSE       -> ["l3 " ++ show offset]
+                                    TEMP_SET    -> ["l2 " ++ show offset ++ show arg]
+                                    CLEAR       -> ["l1"]
+                                    ENABLE_DUP  -> ["l8"]
                                     DISABLE_DUP -> ["l9"]
 
 eval_cmd (CMD prefix x y) = case prefix of
-                              (LAYER op) -> ["layer operation in " ++ show x]
+                              {-(LAYER op)    -> ["layer operation in " ++ show x]-}
                               (PRINT ptype) -> case ptype of
-                                                     STARTPRINT -> ["g23 "]
-                                                     STOPPRINT -> ["ash"]
+                                                     STARTPRINT -> ["g23 " ++ ""]
+                                                     STOPPRINT  -> ["M25"]
                               {-
                                -G     -> "G" ++ show x
                                -M     -> "M command" ++ show x
@@ -70,7 +74,7 @@ eval_cmd (CMD prefix x y) = case prefix of
                                     
 
 eval_cmd (RAW_GCODE cmdstr) = [cmdstr]
-eval_cmd (CMD_EMPTY) = ["try again"]
+eval_cmd (CMD_EMPTY)        = ["try again"]
 
 {-predefined commands-}
 {-layer_pause offset = -}
