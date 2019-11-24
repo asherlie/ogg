@@ -28,13 +28,15 @@ flatten [x]        = x
 flatten []         = ""
 
 numeric :: String -> Bool
-numeric (x:rest) = elem x "0123456789" && (numeric rest)
-numeric [] = True
+{- empty string is not numeric -}
+numeric [] = False
+numeric str = (not (elem False (map (\x -> elem x "0123456789") str)))
 
---process_cmd :: String -> [String]
 -- takes in a string broken up by spaces
 process_cmd :: [String] -> CMD
-{-process_cmd ['l':ch:rest, x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)-}
+{- no command starting with the empty string is valid -}
+process_cmd ("":_) = CMD_EMPTY
+{-process_cmd ['l':ch:_, "", ""] = CMD_EMPTY-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
                                     'p' -> case (numeric x) && (numeric y) of
                                           {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
@@ -44,7 +46,10 @@ process_cmd ['l':ch:rest, x, y]  = case ch of
                                     {-'t' -> -}
                                     _  -> CMD_EMPTY
 {-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
-process_cmd ["", "", ""] = CMD_EMPTY
+{-process_cmd ['l':_, _, _] = CMD_EMPTY-}
+{-process_cmd 'l':_:_ = CMD_EMPTY-}
+process_cmd (('l':_):_) = CMD_EMPTY
+                        
 process_cmd lst          = RAW_GCODE (flatten lst)
 
 {- generates serial output 
