@@ -33,7 +33,9 @@ numeric [] = True
 process_cmd :: [String] -> CMD
 {-process_cmd ['l':ch:rest, x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
-                                    'p' -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)
+                                    'p' -> case (numeric x) && (numeric y) of
+                                          True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)
+                                          _    -> CMD_EMPTY
 {-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
 process_cmd ["", "", ""] = CMD_EMPTY
 process_cmd lst          = RAW_GCODE (flatten lst)
@@ -53,7 +55,7 @@ eval_cmd (CMD (LAYER op) offset arg) = case op of
 eval_cmd (CMD prefix x y) = case prefix of
                               (LAYER op) -> ["layer operation in " ++ show x]
                               (PRINT ptype) -> case ptype of
-                                                     STARTPRINT -> ["g23"]
+                                                     STARTPRINT -> ["g23 "]
                                                      STOPPRINT -> ["ash"]
                               {-
                                -G     -> "G" ++ show x
