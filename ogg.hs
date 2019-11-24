@@ -5,7 +5,10 @@
  -}
 
 data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
-data CMD_PRE = LAYER LAYER_OP | G | M
+{- print commands -}
+data PRINT_CMD = STARTPRINT | STOPPRINT
+
+data CMD_PRE = LAYER LAYER_OP | PRINT PRINT_CMD
 data CMD     = CMD CMD_PRE Integer Integer | RAW_GCODE String | CMD_EMPTY
 {-data MACRO   = CMD CMD-}
 
@@ -31,26 +34,41 @@ process_cmd :: [String] -> CMD
 {-process_cmd ['l':ch:rest, x, y]  = CMD LAYER (read x :: Integer) (read y :: Integer)-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
                                     'p' -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)
-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)
+{-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
 process_cmd ["", "", ""] = CMD_EMPTY
 process_cmd lst          = RAW_GCODE (flatten lst)
 
-{- generates serial output -}
-eval_cmd :: CMD -> String
+{- generates serial output 
+ - there is no guarantee that eval_cmd returns just one gcode command
+ - for each CMD
+ -}
+eval_cmd :: CMD -> [String]
 eval_cmd (CMD (LAYER op) offset arg) = case op of
-                                    PAUSE -> "l3 " ++ show offset
-                                    TEMP_SET -> "l2 " ++ show offset ++ show arg
-                                    CLEAR -> "l1"
-                                    ENABLE_DUP -> "l8"
-                                    DISABLE_DUP -> "l9"
+                                    PAUSE -> ["l3 " ++ show offset]
+                                    TEMP_SET -> ["l2 " ++ show offset ++ show arg]
+                                    CLEAR -> ["l1"]
+                                    ENABLE_DUP -> ["l8"]
+                                    DISABLE_DUP -> ["l9"]
 
 eval_cmd (CMD prefix x y) = case prefix of
-                              (LAYER op) -> "layer operation in " ++ show x
-                              G     -> "G" ++ show x
-                              M     -> "M command" ++ show x
+                              (LAYER op) -> ["layer operation in " ++ show x]
+                              (PRINT ptype) -> case ptype of
+                                                     STARTPRINT -> ["g23"]
+                                                     STOPPRINT -> ["ash"]
+                              {-
+                               -G     -> "G" ++ show x
+                               -M     -> "M command" ++ show x
+                               -}
+                              {-PRINT ->-}
+{-
+ -eval_cmd (CMD (PRINT ptype)_ _) = case ptype of
+ -                                    STARTPRINT -> "asdh"
+ -                                    STOPPRINT -> "asd"
+ -}
+                                    
 
-eval_cmd (RAW_GCODE cmdstr) = cmdstr
-eval_cmd (CMD_EMPTY) = "try again"
+eval_cmd (RAW_GCODE cmdstr) = [cmdstr]
+eval_cmd (CMD_EMPTY) = ["try again"]
 
 {-predefined commands-}
 {-layer_pause offset = -}
@@ -59,4 +77,4 @@ eval_cmd (CMD_EMPTY) = "try again"
 
 main = do
       name <- getLine
-      putStrLn (eval_cmd (process_cmd (chunk name)))
+      putStrLn (head (eval_cmd (process_cmd (chunk name))))
