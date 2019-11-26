@@ -51,15 +51,14 @@ process_cmd ['l':ch:rest, x, y]  = case ch of
                                     'p' -> case (numeric x) of
                                           {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
                                           True -> CMD (LAYER PAUSE) (CMD_ARG_INT (read x :: Integer)) CMD_ARG_EMPTY
-                                          _    -> CMD_EMPTY
+                                          _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
                                     't' -> case (numeric x && numeric y) of
                                           True -> CMD (LAYER TEMP_SET) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
-                                          _    -> CMD_EMPTY
+                                          _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
                                     {-layer temp-}
                                     {-'t' -> -}
-                                    _  -> CMD_EMPTY
+                                    _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
 
-process_cmd (('l':_):_) = CMD_EMPTY
 process_cmd ("startprint":"":_) = CMD_EMPTY
 process_cmd ["startprint", fname, _] = CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) CMD_ARG_EMPTY
 process_cmd ("startprint":_) = CMD_EMPTY
@@ -114,4 +113,4 @@ gen_gcode str = eval_cmd (process_cmd (chunk str))
 
 main = do
       name <- getLine
-      putStrLn (head (eval_cmd (process_cmd (chunk name))))
+      putStrLn (head (gen_gcode name))
