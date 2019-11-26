@@ -43,6 +43,7 @@ numeric str = foldr1 (&&) (map (\x -> elem x "0123456789") str)
 
 -- takes in a string broken up by spaces
 process_cmd :: [String] -> CMD
+
 {- no command starting with the empty string is valid -}
 process_cmd ("":_) = CMD_EMPTY
 {-process_cmd ['l':ch:_, "", ""] = CMD_EMPTY-}
@@ -108,6 +109,8 @@ eval_cmd (CMD_EMPTY)        = ["try again"]
 {-layer_pause offset = -}
 
 {-parse_str :: String -> CMD-}
+gen_gcode :: String -> [String]
+gen_gcode str = eval_cmd (process_cmd (chunk str))
 
 main = do
       name <- getLine
