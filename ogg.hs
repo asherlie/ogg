@@ -3,6 +3,7 @@
  - Generates
  - Gcode
  -}
+import Control.Concurrent
 
 data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
 {- print commands -}
@@ -11,6 +12,7 @@ data PRINT_CMD = STARTPRINT | STOPPRINT
 data CMD_PRE = LAYER LAYER_OP | PRINT PRINT_CMD
 data CMD_ARG = CMD_ARG_STR String
              | CMD_ARG_INT Integer
+             | CMD_ARG_EMPTY
 
 data CMD     = CMD CMD_PRE CMD_ARG CMD_ARG | RAW_GCODE String | CMD_EMPTY
 {-data MACRO   = CMD CMD-}
@@ -29,6 +31,13 @@ flatten []         = ""
 
 numeric :: String -> Bool
 {- empty string is not numeric -}
+numeric_float [] = False
+numeric_float str = case (sum (map (\c -> case c of '.' -> 1; _ -> 0) str)) of
+                        1 -> case reverse str of
+                                    ('.':_) -> False
+                                    _       -> sum (map (\x -> case x of True -> 0; _ -> 1) (map (\x -> elem x "0123456789") str)) <= 1
+                        _    -> False
+                  
 numeric [] = False
 numeric str = (not (elem False (map (\x -> elem x "0123456789") str)))
 
@@ -38,17 +47,21 @@ process_cmd :: [String] -> CMD
 process_cmd ("":_) = CMD_EMPTY
 {-process_cmd ['l':ch:_, "", ""] = CMD_EMPTY-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
-                                    'p' -> case (numeric x) && (numeric y) of
+                                    'p' -> case (numeric x) of
                                           {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
-                                          True -> CMD (LAYER PAUSE) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
+                                          True -> CMD (LAYER PAUSE) (CMD_ARG_INT (read x :: Integer)) CMD_ARG_EMPTY
+                                          _    -> CMD_EMPTY
+                                    't' -> case (numeric x && numeric y) of
+                                          True -> CMD (LAYER TEMP_SET) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
                                           _    -> CMD_EMPTY
                                     {-layer temp-}
                                     {-'t' -> -}
                                     _  -> CMD_EMPTY
-{-process_cmd ["g", x, y]  = CMD G (read x :: Integer) (read y :: Integer)-}
-{-process_cmd ['l':_, _, _] = CMD_EMPTY-}
-{-process_cmd 'l':_:_ = CMD_EMPTY-}
+
 process_cmd (('l':_):_) = CMD_EMPTY
+process_cmd ("startprint":"":_) = CMD_EMPTY
+process_cmd ["startprint", fname, _] = CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) CMD_ARG_EMPTY
+process_cmd ("startprint":_) = CMD_EMPTY
                         
 process_cmd lst          = RAW_GCODE (flatten lst)
 
@@ -57,15 +70,19 @@ process_cmd lst          = RAW_GCODE (flatten lst)
  - for each CMD
  -}
 eval_cmd :: CMD -> [String]
-eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) (CMD_ARG_INT arg)) = case op of
+eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) arg) = case op of
                                     PAUSE       -> ["l3 " ++ show offset]
-                                    TEMP_SET    -> ["l2 " ++ show offset ++ show arg]
                                     CLEAR       -> ["l1"]
                                     ENABLE_DUP  -> ["l8"]
                                     DISABLE_DUP -> ["l9"]
+                                    {-TEMP_SET    -> ["l2 " ++ show offset ++ show arg]-}
+                                    TEMP_SET    -> case arg of
+                                                      (CMD_ARG_INT temp) ->["l2 " ++ show offset ++ " " ++ show temp]
 {- layer op without integer arguments -}
 eval_cmd (CMD (LAYER op) _ _) = [""]
 
+{- we'll need concurrency to wait for G117 to report back -}
+eval_cmd (CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) _) = ["M21", "M23 " ++ fname, "M24"]
 eval_cmd (CMD prefix x y) = case prefix of
                               {-(LAYER op)    -> ["layer operation in " ++ show x]-}
                               (PRINT ptype) -> case ptype of
