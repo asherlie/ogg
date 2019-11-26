@@ -39,7 +39,7 @@ numeric_float str = case (sum (map (\c -> case c of '.' -> 1; _ -> 0) str)) of
                         _    -> False
                   
 numeric [] = False
-numeric str = (not (elem False (map (\x -> elem x "0123456789") str)))
+numeric str = foldr1 (&&) (map (\x -> elem x "0123456789") str)
 
 -- takes in a string broken up by spaces
 process_cmd :: [String] -> CMD
