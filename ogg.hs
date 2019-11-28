@@ -130,6 +130,26 @@ open_serial port = do
                      return s
 
 
+{-
+ -we should have a function that standalone reads a line from serial
+ -we'll just have this occur forever in a loop for our read thread
+ -we can also use this for when we wait for data  if we need to print some shite
+ -like get_pos command
+ -}
+
+read_serial port = do   
+                     recv port 10 >>= print
+
+{-TODO: use maybe-}
+await_serial port 0 = return ""
+await_serial port timeout  = do
+                               putStrLn (show timeout)
+                               bytes <- recv port 10
+                               let str = B.unpack bytes
+                               case str of
+                                    "" -> await_serial port (timeout-1)
+                                    _  -> return str
+
 {- TODO: 
  - add a concurrent section of code that reads and prints
  - serial data
