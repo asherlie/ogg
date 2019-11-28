@@ -3,7 +3,12 @@
  - Generates
  - Gcode
  -}
+import System.Environment
+
 import Control.Concurrent
+import qualified Data.ByteString.Char8 as B
+import System.Hardware.Serialport
+
 
 data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
 {- print commands -}
@@ -106,6 +111,7 @@ eval_cmd (CMD prefix x y) = case prefix of
 
 eval_cmd (RAW_GCODE cmdstr) = [cmdstr]
 eval_cmd (CMD_EMPTY)        = ["try again"]
+                     
 
 {-predefined commands-}
 {-layer_pause offset = -}
@@ -114,6 +120,42 @@ eval_cmd (CMD_EMPTY)        = ["try again"]
 gen_gcode :: String -> [String]
 gen_gcode str = eval_cmd (process_cmd (chunk str))
 
+send_cmds :: SerialPort -> [String] -> [IO Int]
+send_cmds _ [] = [return 0]
+send_cmds p cmds = map (send p) (map B.pack cmds)
+
+open_serial :: FilePath -> IO SerialPort
+open_serial port = do
+                     s <- openSerial port defaultSerialSettings { commSpeed = CS2400 }
+                     return s
+
+
+{- TODO: 
+ - add a concurrent section of code that reads and prints
+ - serial data
+ -}
+repl :: SerialPort -> IO ()
+repl port = do
+             ln <- getLine
+             case ln of
+                  "quit" -> do
+                              closeSerial port
+                              return ()
+                  _      -> do
+                              let cmds = gen_gcode ln
+                              let y = send_cmds port cmds
+                              putStrLn ("sent command: " ++ (show cmds))
+                              repl port
+
 main = do
-      name <- getLine
-      putStrLn (head (gen_gcode name))
+      port <- getArgs
+      case port of
+           []  -> putStrLn "usage: <serial port>"
+           p:r ->  do
+                  {-s <- openSerial p defaultSerialSettings { commSpeed = CS2400 }-}
+                  conn <- open_serial p
+                  repl conn
+                  {-
+                   -let y = send_cmds conn (gen_gcode "lo")
+                   -putStrLn "sent"
+                   -}
