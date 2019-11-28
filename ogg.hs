@@ -32,12 +32,6 @@ flatten lst = case (filter (\x -> x /= "") lst) of
                                   _  -> x ++ " " ++ flatten r
                     _     -> []
 
-{-
- -flatten (x:y:rest) = x ++ " " ++ y ++ " " ++ (flatten rest)
- -flatten [x]        = x
- -flatten []         = ""
- -
- -}
 numeric :: String -> Bool
 {- empty string is not numeric -}
 numeric_float [] = False
