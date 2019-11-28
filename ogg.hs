@@ -25,10 +25,19 @@ chunk str = case (words str) of
                   _            -> ["", "", ""]
 
 flatten :: [String] -> String
-flatten (x:y:rest) = x ++ " " ++ y ++ " " ++ (flatten rest)
-flatten [x]        = x
-flatten []         = ""
+flatten lst = case (filter (\x -> x /= "") lst) of
+                    x:[]  -> x
+                    x:y:r -> case r of
+                                  [] -> x ++ " " ++ y
+                                  _  -> x ++ " " ++ flatten r
+                    _     -> []
 
+{-
+ -flatten (x:y:rest) = x ++ " " ++ y ++ " " ++ (flatten rest)
+ -flatten [x]        = x
+ -flatten []         = ""
+ -
+ -}
 numeric :: String -> Bool
 {- empty string is not numeric -}
 numeric_float [] = False
