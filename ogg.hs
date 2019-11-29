@@ -5,7 +5,6 @@
  -}
 import System.Environment
 
-import Control.Concurrent
 import qualified Data.ByteString.Char8 as B
 import System.Hardware.Serialport
 
@@ -27,10 +26,10 @@ data GCODE_CMD = GCODE_CMD GCODE_ATTR [String]
 
 chunk :: String -> [String]
 chunk str = case (words str) of
-                  x:y:z:rest   -> [x, y, z]
-                  x:y:rest     -> [x, y, ""]
-                  x:rest       -> [x, "", ""]
-                  _            -> ["", "", ""]
+                  x:y:z:_  -> [x, y, z]
+                  x:y:_    -> [x, y, ""]
+                  x:_      -> [x, "", ""]
+                  _        -> ["", "", ""]
 
 flatten :: [String] -> String
 flatten lst = case (filter (\x -> x /= "") lst) of
@@ -42,13 +41,6 @@ flatten lst = case (filter (\x -> x /= "") lst) of
 
 numeric :: String -> Bool
 {- empty string is not numeric -}
-numeric_float [] = False
-numeric_float str = case (sum (map (\c -> case c of '.' -> 1; _ -> 0) str)) of
-                        1 -> case reverse str of
-                                    ('.':_) -> False
-                                    _       -> sum (map (\x -> case x of True -> 0; _ -> 1) (map (\x -> elem x "0123456789") str)) <= 1
-                        _    -> False
-                  
 numeric [] = False
 numeric str = foldr1 (&&) (map (\x -> elem x "0123456789") str)
 
@@ -92,17 +84,17 @@ eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) arg) = case op of
                                     {-TEMP_SET    -> ["l2 " ++ show offset ++ show arg]-}
                                     TEMP_SET    -> case arg of
                                                       (CMD_ARG_INT temp) -> GCODE_CMD NONE ["l2 " ++ show offset ++ " " ++ show temp]
+                                                      _                  -> GCODE_CMD NONE [""]
 {- layer op without integer arguments -}
-eval_cmd (CMD (LAYER op) _ _) = GCODE_CMD NONE [""]
+eval_cmd (CMD (LAYER _) _ _) = GCODE_CMD NONE [""]
 
 {- we'll need concurrency to wait for G117 to report back -}
 eval_cmd (CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) _) = GCODE_CMD NONE ["M21", "M23 " ++ fname, "M24"]
-eval_cmd (CMD (PRINT GET_POS) _ _) = GCODE_CMD AWAIT_RESPONSE ["M114"]
-eval_cmd (CMD prefix x y) = case prefix of
-                              {-(LAYER op)    -> ["layer operation in " ++ show x]-}
+eval_cmd (CMD prefix _ _) = case prefix of
                               (PRINT ptype) -> case ptype of
                                                      STARTPRINT -> GCODE_CMD NONE ["g23 " ++ ""]
                                                      STOPPRINT  -> GCODE_CMD NONE ["M25"]
+                                                     GET_POS    -> GCODE_CMD AWAIT_RESPONSE ["M114"]
                               _             -> GCODE_CMD NONE [""]
 
 
@@ -118,7 +110,7 @@ gen_gcode :: String -> GCODE_CMD
 gen_gcode str = eval_cmd (process_cmd (chunk str))
 
 send_cmds :: SerialPort -> GCODE_CMD -> [IO Int]
-send_cmds p (GCODE_CMD attr lst) = case lst of
+send_cmds p (GCODE_CMD _ lst) = case lst of
                        [] -> [return 0]
                        _  -> map (send p) (map B.pack lst)
 
@@ -129,13 +121,14 @@ open_serial port = do
 
 
 {-TODO: use maybe-}
-await_serial port 0 = return ""
-await_serial port timeout  = do
-                               putStrLn (show timeout)
+await_serial :: SerialPort -> Int -> IO (String)
+await_serial _ 0 = return ""
+await_serial port to  = do
+                               putStrLn (show to)
                                bytes <- recv port 100
                                let str = B.unpack bytes
                                case str of
-                                    "" -> await_serial port (timeout-1)
+                                    "" -> await_serial port (to-1)
                                     _  -> return str
 
 {- TODO: 
@@ -159,11 +152,12 @@ repl port = do
                                    (GCODE_CMD _ lst) -> putStrLn ("sent command: " ++ (show lst))
                               repl port
 
+main :: IO ()
 main = do
       port <- getArgs
       case port of
            []  -> putStrLn "usage: <serial port>"
-           p:r ->  do
+           p:_ ->  do
                   {-s <- openSerial p defaultSerialSettings { commSpeed = CS2400 }-}
                   conn <- open_serial p
                   repl conn
