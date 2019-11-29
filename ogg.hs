@@ -156,7 +156,9 @@ main :: IO ()
 main = do
       port <- getArgs
       case port of
-           []  -> putStrLn "usage: <serial port>"
+           []  -> do
+                    pn <- getProgName
+                    putStrLn ("usage: ./" ++ pn ++ " <serial port>")
            p:_ ->  do
                   {-s <- openSerial p defaultSerialSettings { commSpeed = CS2400 }-}
                   conn <- open_serial p
