@@ -128,13 +128,6 @@ open_serial port = do
                      return s
 
 
-{-
- -we should have a function that standalone reads a line from serial
- -we'll just have this occur forever in a loop for our read thread
- -we can also use this for when we wait for data  if we need to print some shite
- -like get_pos command
- -}
-
 {-TODO: use maybe-}
 await_serial port 0 = return ""
 await_serial port timeout  = do
