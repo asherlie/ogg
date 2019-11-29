@@ -49,7 +49,6 @@ process_cmd :: [String] -> CMD
 
 {- no command starting with the empty string is valid -}
 process_cmd ("":_) = CMD_EMPTY
-{-process_cmd ['l':ch:_, "", ""] = CMD_EMPTY-}
 process_cmd ['l':ch:rest, x, y]  = case ch of
                                     'p' -> case (numeric x) of
                                           {-True -> CMD (LAYER PAUSE) (read x :: Integer) (read y :: Integer)-}
@@ -58,8 +57,6 @@ process_cmd ['l':ch:rest, x, y]  = case ch of
                                     't' -> case (numeric x && numeric y) of
                                           True -> CMD (LAYER TEMP_SET) (CMD_ARG_INT (read x :: Integer)) (CMD_ARG_INT (read y :: Integer))
                                           _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
-                                    {-layer temp-}
-                                    {-'t' -> -}
                                     _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
 
 process_cmd ("getpos":_:_) = CMD (PRINT GET_POS) CMD_ARG_EMPTY CMD_ARG_EMPTY
@@ -81,14 +78,12 @@ eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) arg) = case op of
                                     CLEAR       -> GCODE_CMD NONE ["l1"]
                                     ENABLE_DUP  -> GCODE_CMD NONE ["l8"]
                                     DISABLE_DUP -> GCODE_CMD NONE ["l9"]
-                                    {-TEMP_SET    -> ["l2 " ++ show offset ++ show arg]-}
                                     TEMP_SET    -> case arg of
                                                       (CMD_ARG_INT temp) -> GCODE_CMD NONE ["l2 " ++ show offset ++ " " ++ show temp]
                                                       _                  -> GCODE_CMD NONE [""]
 {- layer op without integer arguments -}
 eval_cmd (CMD (LAYER _) _ _) = GCODE_CMD NONE [""]
 
-{- we'll need concurrency to wait for G117 to report back -}
 eval_cmd (CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) _) = GCODE_CMD NONE ["M21", "M23 " ++ fname, "M24"]
 eval_cmd (CMD prefix _ _) = case prefix of
                               (PRINT ptype) -> case ptype of
@@ -131,10 +126,6 @@ await_serial port to  = do
                                     "" -> await_serial port (to-1)
                                     _  -> return str
 
-{- TODO: 
- - add a concurrent section of code that reads and prints
- - serial data
- -}
 repl :: SerialPort -> IO ()
 repl port = do
              ln <- getLine
@@ -160,10 +151,5 @@ main = do
                     pn <- getProgName
                     putStrLn ("usage: ./" ++ pn ++ " <serial port>")
            p:_ ->  do
-                  {-s <- openSerial p defaultSerialSettings { commSpeed = CS2400 }-}
                   conn <- open_serial p
                   repl conn
-                  {-
-                   -let y = send_cmds conn (gen_gcode "lo")
-                   -putStrLn "sent"
-                   -}
