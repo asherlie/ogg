@@ -36,7 +36,7 @@ flatten lst = case (filter (\x -> x /= "") lst) of
                     x:[]  -> x
                     x:y:r -> case r of
                                   [] -> x ++ " " ++ y
-                                  _  -> x ++ " " ++ flatten r
+                                  _  -> x ++ " " ++ y ++ " " ++ flatten r
                     _     -> []
 
 numeric :: String -> Bool
