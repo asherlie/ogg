@@ -144,7 +144,7 @@ repl port = do
                               return ()
                   _      -> do
                               let cmds = gen_gcode ln
-                              let y = send_cmds port cmds
+                              _ <- sequence (send_cmds port cmds)
                               case cmds of 
                                    (GCODE_CMD AWAIT_RESPONSE _) -> do
                                                                      ser_str <- (await_serial port 100)
