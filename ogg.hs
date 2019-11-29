@@ -12,7 +12,7 @@ import System.Hardware.Serialport
 
 data LAYER_OP = PAUSE | TEMP_SET | CLEAR | ENABLE_DUP | DISABLE_DUP
 {- print commands -}
-data PRINT_CMD = STARTPRINT | STOPPRINT
+data PRINT_CMD = STARTPRINT | STOPPRINT | GET_POS
 
 data CMD_PRE = LAYER LAYER_OP | PRINT PRINT_CMD
 data CMD_ARG = CMD_ARG_STR String
@@ -20,7 +20,9 @@ data CMD_ARG = CMD_ARG_STR String
              | CMD_ARG_EMPTY
 
 data CMD     = CMD CMD_PRE CMD_ARG CMD_ARG | RAW_GCODE String | CMD_EMPTY
-data GCODE_CMD = GCODE_CMD [String]
+
+data GCODE_ATTR = NONE | AWAIT_RESPONSE
+data GCODE_CMD = GCODE_CMD GCODE_ATTR [String]
 {-data MACRO   = CMD CMD-}
 
 chunk :: String -> [String]
@@ -68,6 +70,8 @@ process_cmd ['l':ch:rest, x, y]  = case ch of
                                     {-'t' -> -}
                                     _    -> RAW_GCODE (flatten ['l':ch:rest, x, y])
 
+process_cmd ("getpos":_:_) = CMD (PRINT GET_POS) CMD_ARG_EMPTY CMD_ARG_EMPTY
+
 process_cmd ("startprint":"":_) = CMD_EMPTY
 process_cmd ["startprint", fname, _] = CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) CMD_ARG_EMPTY
 process_cmd ("startprint":_) = CMD_EMPTY
@@ -81,39 +85,30 @@ process_cmd lst          = RAW_GCODE (flatten lst)
 {-eval_cmd :: CMD -> [String]-}
 eval_cmd :: CMD -> GCODE_CMD
 eval_cmd (CMD (LAYER op) (CMD_ARG_INT offset) arg) = case op of
-                                    PAUSE       -> GCODE_CMD ["l3 " ++ show offset]
-                                    CLEAR       -> GCODE_CMD ["l1"]
-                                    ENABLE_DUP  -> GCODE_CMD ["l8"]
-                                    DISABLE_DUP -> GCODE_CMD ["l9"]
+                                    PAUSE       -> GCODE_CMD NONE ["l3 " ++ show offset]
+                                    CLEAR       -> GCODE_CMD NONE ["l1"]
+                                    ENABLE_DUP  -> GCODE_CMD NONE ["l8"]
+                                    DISABLE_DUP -> GCODE_CMD NONE ["l9"]
                                     {-TEMP_SET    -> ["l2 " ++ show offset ++ show arg]-}
                                     TEMP_SET    -> case arg of
-                                                      (CMD_ARG_INT temp) -> GCODE_CMD ["l2 " ++ show offset ++ " " ++ show temp]
+                                                      (CMD_ARG_INT temp) -> GCODE_CMD NONE ["l2 " ++ show offset ++ " " ++ show temp]
 {- layer op without integer arguments -}
-eval_cmd (CMD (LAYER op) _ _) = GCODE_CMD [""]
+eval_cmd (CMD (LAYER op) _ _) = GCODE_CMD NONE [""]
 
 {- we'll need concurrency to wait for G117 to report back -}
-eval_cmd (CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) _) = GCODE_CMD ["M21", "M23 " ++ fname, "M24"]
+eval_cmd (CMD (PRINT STARTPRINT) (CMD_ARG_STR fname) _) = GCODE_CMD NONE ["M21", "M23 " ++ fname, "M24"]
+eval_cmd (CMD (PRINT GET_POS) _ _) = GCODE_CMD AWAIT_RESPONSE ["M114"]
 eval_cmd (CMD prefix x y) = case prefix of
                               {-(LAYER op)    -> ["layer operation in " ++ show x]-}
                               (PRINT ptype) -> case ptype of
-                                                     STARTPRINT -> GCODE_CMD ["g23 " ++ ""]
-                                                     STOPPRINT  -> GCODE_CMD ["M25"]
-                              _             -> GCODE_CMD [""]
-                              {-
-                               -G     -> "G" ++ show x
-                               -M     -> "M command" ++ show x
-                               -}
-                              {-PRINT ->-}
-{-
- -eval_cmd (CMD (PRINT ptype)_ _) = case ptype of
- -                                    STARTPRINT -> "asdh"
- -                                    STOPPRINT -> "asd"
- -}
-                                    
+                                                     STARTPRINT -> GCODE_CMD NONE ["g23 " ++ ""]
+                                                     STOPPRINT  -> GCODE_CMD NONE ["M25"]
+                              _             -> GCODE_CMD NONE [""]
 
-eval_cmd (RAW_GCODE cmdstr) = GCODE_CMD [cmdstr]
-eval_cmd (CMD_EMPTY)        = GCODE_CMD ["try again"]
-                     
+
+eval_cmd (RAW_GCODE cmdstr) = GCODE_CMD NONE [cmdstr]
+eval_cmd (CMD_EMPTY)        = GCODE_CMD NONE ["try again"]
+
 
 {-predefined commands-}
 {-layer_pause offset = -}
@@ -123,7 +118,7 @@ gen_gcode :: String -> GCODE_CMD
 gen_gcode str = eval_cmd (process_cmd (chunk str))
 
 send_cmds :: SerialPort -> GCODE_CMD -> [IO Int]
-send_cmds p (GCODE_CMD lst) = case lst of
+send_cmds p (GCODE_CMD attr lst) = case lst of
                        [] -> [return 0]
                        _  -> map (send p) (map B.pack lst)
 
@@ -165,7 +160,10 @@ repl port = do
                               let cmds = gen_gcode ln
                               let y = send_cmds port cmds
                               case cmds of 
-                                   (GCODE_CMD lst) -> putStrLn ("sent command: " ++ (show lst))
+                                   (GCODE_CMD AWAIT_RESPONSE _) -> do
+                                                                     ser_str <- (await_serial port 100)
+                                                                     putStrLn ser_str
+                                   (GCODE_CMD _ lst) -> putStrLn ("sent command: " ++ (show lst))
                               repl port
 
 main = do
