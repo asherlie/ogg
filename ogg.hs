@@ -122,9 +122,10 @@ eval_cmd (CMD_EMPTY)        = GCODE_CMD ["try again"]
 gen_gcode :: String -> GCODE_CMD
 gen_gcode str = eval_cmd (process_cmd (chunk str))
 
-send_cmds :: SerialPort -> [String] -> [IO Int]
-send_cmds _ [] = [return 0]
-send_cmds p cmds = map (send p) (map B.pack cmds)
+send_cmds :: SerialPort -> GCODE_CMD -> [IO Int]
+send_cmds p (GCODE_CMD lst) = case lst of
+                       [] -> [return 0]
+                       _  -> map (send p) (map B.pack lst)
 
 open_serial :: FilePath -> IO SerialPort
 open_serial port = do
@@ -163,7 +164,8 @@ repl port = do
                   _      -> do
                               let cmds = gen_gcode ln
                               let y = send_cmds port cmds
-                              putStrLn ("sent command: " ++ (show cmds))
+                              case cmds of 
+                                   (GCODE_CMD lst) -> putStrLn ("sent command: " ++ (show lst))
                               repl port
 
 main = do
